@@ -136,7 +136,7 @@ void init_keymap() {
   key_map[0x50] = LEFT;  // Keyboard Left Arrow
 }
 
-char decode_keypress(uint8_t *keycode) {
+char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
   int usb_code = (int)keycode[0]; // Simulating 'a' key
   char output = key_map[usb_code];
   return output;
@@ -154,7 +154,7 @@ void write_char(char input) {
     printf("Cursor: %d\n", cursor_position);
     printf("Write string: %s\n", write_zone_data);
   }
-  
+
   if (size < BUFFER_SIZE && cursor_position < BUFFER_SIZE) {
     if (input == BACKSPACE && size > 0) {
       delete_char();
@@ -163,7 +163,7 @@ void write_char(char input) {
       move_cursor_left();
     } else if (input == RIGHT) {
       move_cursor_right();
-    } else if (input != BACKSPACE) {
+    } else if (input < ENTER || input > LEFT && input != NULL) {
       write_zone_data[cursor_position] = input;
       cursor_position++;
     }
@@ -320,7 +320,7 @@ int main() {
       pthread_mutex_lock(&write_zone_mutex);
 
       // Update write_zone_data according to keyboard input here
-      char input = decode_keypress(packet.keycode);
+      char input = decode_keypress(packet.keycode, packet.modifiers);
 
       // If input is a normal ascii character to add, add it to write_zone_data
       // at index cursor_position
