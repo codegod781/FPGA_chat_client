@@ -131,8 +131,7 @@ int main() {
   // We will allow the character to enter up to BUFFER_SIZE characters
   // (including the \0) of write data in the writing panel on the bottom, as
   // that's how much data we'll allow the user to send on the socket
-  // TODO: replace back to BUFFER_SIZE
-  if ((write_zone_data = malloc((BUFFER_SIZE + 1) * sizeof(char))) == NULL) {
+  if ((write_zone_data = malloc((BUFFER_SIZE) * sizeof(char))) == NULL) {
     fprintf(stderr, "Error: malloc() failed for write_zone_data.\n");
     exit(1);
   }
@@ -171,12 +170,8 @@ int main() {
               packet.keycode[1]);
       printf("%s\n", keystate);
 
-      // DEMO: set a demo message into the write zone
       pthread_mutex_lock(&write_zone_mutex);
-      strncpy(write_zone_data, "0123456789 10123456789 20123456789 30123456789 "
-                               "40123456789 50123456789 60123456789 "
-                               "70123456789 80123456789 90123456789 100123456",
-              BUFFER_SIZE);
+      // Update write_zone_data according to keyboard input here
       pthread_mutex_unlock(&write_zone_mutex);
       // fbputs(keystate, 6, 0);
       if (packet.keycode[0] == 0x29) { /* ESC pressed? */
@@ -217,7 +212,6 @@ void *drawing_thread_f(void *ignored) {
 
     // Now to split the data from the write zone into lines that will fit
     char write_r_1[TEXT_COLS_ON_SCREEN + 1], write_r_2[TEXT_COLS_ON_SCREEN + 1];
-    write_r_1[0] = '>'; // Write point
     write_r_1[TEXT_COLS_ON_SCREEN] = '\0';
     write_r_2[TEXT_COLS_ON_SCREEN] = '\0';
 
@@ -228,13 +222,34 @@ void *drawing_thread_f(void *ignored) {
     write_str_length = (first_null == NULL) ? 0 : first_null - write_zone_data;
 
     // How many rows would it take to fit this on the screen?
-    // We lose a char on line 1 to >
-    int write_num_rows = write_str_length / 64 + 1;
+    // We lose a char to >
+    int write_num_rows = (write_str_length) / 64 + 1;
+    int first_char_displayed; // The index of the first visible char
+
+    if (write_num_rows <= 2)
+      first_char_displayed = 0; // Display from the start
+    else
+      first_char_displayed = (write_num_rows - 2) * TEXT_COLS_ON_SCREEN - 1;
+
+    // Now fill r_1 and r_2 starting from first_char_displayed. Add > if needed
+    if (first_char_displayed == 0) {
+      write_r_1[0] = '>';
+      strncpy(write_r_1 + 1, write_zone_data, TEXT_COLS_ON_SCREEN - 1);
+    } else
+      strncpy(write_r_1, write_zone_data + first_char_displayed,
+              TEXT_COLS_ON_SCREEN);
+
+    if (write_num_rows > 1)
+      strncpy(write_r_2,
+              write_zone_data + (write_num_rows - 1) * TEXT_COLS_ON_SCREEN - 1,
+              TEXT_COLS_ON_SCREEN);
 
     if (DEBUG && write_str_length > 0) {
       printf("Data in write zone: %s\n", write_zone_data);
       printf("Data length: %d\n", write_str_length);
       printf("Rows required: %d\n", write_num_rows);
+      printf("First char displayed: %d (%c)\n", first_char_displayed,
+             write_zone_data[first_char_displayed]);
     }
 
     pthread_mutex_unlock(&write_zone_mutex);
