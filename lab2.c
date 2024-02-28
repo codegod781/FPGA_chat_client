@@ -24,7 +24,7 @@
 #define SERVER_HOST "128.59.19.114"
 #define SERVER_PORT 42000
 
-#define WRITE_SIZE 64
+#define WRITE_SIZE 140
 #define BUFFER_SIZE 128
 #define MAP_SIZE 128
 
@@ -57,7 +57,7 @@ void *drawing_thread_f(void *);
 volatile int drawing_thread_terminate = 0;
 pthread_mutex_t write_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t read_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
-int cursor_position;
+int cursor_position, prev_num_lines;
 char *write_zone_data, *read_zone_data;
 screen_info screen;
 
@@ -300,6 +300,7 @@ int main() {
   printf("%s\n", read_zone_data + 130);
 
   cursor_position = 0;
+  prev_num_lines = 0; // How many lines were used in the write zone at the last keypress
 
   /* Start the network thread */
   if (pthread_create(&network_thread, NULL, network_thread_f, NULL) != 0) {
@@ -452,6 +453,11 @@ void *drawing_thread_f(void *ignored) {
 
     pthread_mutex_unlock(&write_zone_mutex);
 
+    // Do we need to do a screen clear?
+    if (prev_num_lines != write_num_rows)
+      fbclear();
+      
+    prev_num_lines = write_num_rows;
     // Now draw the parts that fit in our two lines
     fbputs(write_r_1, TEXT_ROWS_ON_SCREEN - 2, 0);
     fbputs(write_r_2, TEXT_ROWS_ON_SCREEN - 1, 0);
