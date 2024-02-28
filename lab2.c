@@ -67,6 +67,52 @@ char decode_keypress(uint8_t *keycode) {
   return 'A';
 }
 
+
+void write_char(char *input, int *cursor) {
+    int size = strlen(write_zone_data);
+
+    if (size < BUFFER_SIZE && *cursor < BUFFER_SIZE) {
+        if (strcmp(input, "BACKSPACE") == 0) {
+            delete_char(cursor);
+        } else if (strcmp(input, "LEFT") == 0) {
+            move_cursor_left(cursor);
+        } else if (strcmp(input, "RIGHT") == 0) {
+            move_cursor_right(cursor);
+        } else {
+            write_zone_data[*cursor] = *input;
+            (*cursor)++;
+        }
+    } else {
+        fprintf(stderr, "Buffer Overflow\n");
+    }
+}
+
+void delete_char(int *cursor) {
+    if (*cursor > 0) { // Make sure cursor is not at the beginning
+        // Shift characters to the left starting from the cursor position
+        for (int i = *cursor - 1; i < BUFFER_SIZE - 1; i++) {
+            write_zone_data[i] = write_zone_data[i + 1];
+            // Stop shifting when we encounter the null terminator
+            if (write_zone_data[i] == '\0') {
+                break;
+            }
+        }
+        (*cursor)--; // Move cursor one position to the left
+    }
+}
+
+void move_cursor_left(int *cursor) {
+    if (*cursor > 0) {
+        (*cursor)--; // Move cursor one position to the left
+    }
+}
+
+void move_cursor_right(int *cursor) {
+    if (write_zone_data[*cursor] != '\0') {
+        (*cursor)++; // Move cursor one position to the right
+    }
+}
+
 int main() {
   int err;
 
@@ -188,6 +234,7 @@ int main() {
 
       // Update write_zone_data according to keyboard input here
       char input = decode_keypress(packet.keycode);
+
       // If input is a normal ascii character to add, add it to write_zone_data
       // at index cursor_position
 
@@ -199,6 +246,8 @@ int main() {
       // negative, or let write_zone_data exceed BUFFER_SIZE.
       // write_zone_data[BUFFER_SIZE - 1] should ALWAYS be '\0' - don't let them
       // overwrite
+      write_char(input, cursor_position);
+
       if (DEBUG)
         printf("%s (%c)\n", keystate, input);
 
