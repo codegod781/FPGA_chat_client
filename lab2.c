@@ -49,6 +49,7 @@ void *drawing_thread_f(void *);
 volatile int drawing_thread_terminate = 0;
 pthread_mutex_t write_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t read_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
+int cursor_position;
 char *write_zone_data, *read_zone_data;
 screen_info screen;
 
@@ -145,6 +146,8 @@ int main() {
     write_zone_data[i] = '\0'; // Init to all nulls
   }
 
+  cursor_position = 0;
+
   // The read zone can fit as many chars as there are rows x columns in te read
   // zone, plus a null terminator
   read_zone_size = TEXT_ROWS_ON_SCREEN * TEXT_COLS_ON_SCREEN * sizeof(char) - 1;
@@ -178,6 +181,17 @@ int main() {
 
       // Update write_zone_data according to keyboard input here
       char input = decode_keypress(packet.keycode);
+      // If input is a normal ascii character to add, add it to write_zone_data
+      // at index cursor_position
+
+      // If input is something we agree means a backspace, remove the character
+      // before cursor_position
+      // If the input is something we agree means left arrow, cursor_position--
+      // if the input is something we agree means right arrow, cursor_position++
+      // Don't let cursor position get away from the last character, become
+      // negative, or let write_zone_data exceed BUFFER_SIZE.
+      // write_zone_data[BUFFER_SIZE - 1] should ALWAYS be '\0' - don't let them
+      // overwrite
       if (DEBUG)
         printf("%s (%c)\n", keystate, input);
 
