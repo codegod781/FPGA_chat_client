@@ -333,7 +333,21 @@ int main() {
       // negative, or let write_zone_data exceed BUFFER_SIZE.
       // write_zone_data[BUFFER_SIZE - 1] should ALWAYS be '\0' - don't let them
       // overwrite
-      write_char(input);
+      if (input == ENTER)
+      {
+        // Send the message to the server
+        if (send(sockfd, write_zone_data, strlen(write_zone_data), 0) < 0)
+        {
+          perror("Error sending message to server");
+        }
+        // Clear write_zone_data after sending
+        memset(write_zone_data, 0, BUFFER_SIZE);
+        cursor_position = 0;
+      }
+      else
+      {
+        write_char(input);
+      }
 
       if (DEBUG)
         printf("%s (%c)\n", keystate, input);
