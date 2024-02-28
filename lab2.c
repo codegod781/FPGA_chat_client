@@ -48,7 +48,7 @@ void *drawing_thread_f(void *);
 
 volatile int drawing_thread_terminate = 0;
 pthread_mutex_t write_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t read_zone_mutes = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t read_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
 char *write_zone_data, *read_zone_data;
 screen_info screen;
 
@@ -58,6 +58,8 @@ screen_info screen;
 int TEXT_ROWS_ON_SCREEN;
 // How many cols of text we can fit on screen using fpbuts
 int TEXT_COLS_ON_SCREEN;
+// The size of read_zone_data. To be calculated after the above are populated
+uint read_zone_size;
 
 int main() {
   int err;
@@ -129,12 +131,20 @@ int main() {
   // We will allow the character to enter up to BUFFER_SIZE characters
   // (including the \0) of write data in the writing panel on the bottom, as
   // that's how much data we'll allow the user to send on the socket
-  if ((write_zone_data = malloc(BUFFER_SIZE * sizeof(char))) == NULL) {
+  // TODO: replace back to BUFFER_SIZE
+  if ((write_zone_data = malloc((BUFFER_SIZE + 1) * sizeof(char))) == NULL) {
     fprintf(stderr, "Error: malloc() failed for write_zone_data.\n");
     exit(1);
   }
 
-  if ((read_zone_data = malloc(BUFFER_SIZE * sizeof(char))) == NULL) {
+  for (int i = 0; i < BUFFER_SIZE; i++) {
+    write_zone_data[i] = '\0'; // Init to all nulls
+  }
+
+  // The read zone can fit as many chars as there are rows x columns in te read
+  // zone, plus a null terminator
+  read_zone_size = TEXT_ROWS_ON_SCREEN * TEXT_COLS_ON_SCREEN * sizeof(char) - 1;
+  if ((read_zone_data = malloc(read_zone_size)) == NULL) {
     fprintf(stderr, "Error: malloc() failed for read_zone_data.\n");
     exit(1);
   }
@@ -160,6 +170,14 @@ int main() {
       sprintf(keystate, "%02x %02x %02x", packet.modifiers, packet.keycode[0],
               packet.keycode[1]);
       printf("%s\n", keystate);
+
+      // DEMO: set a demo message into the write zone
+      pthread_mutex_lock(&write_zone_mutex);
+      strncpy(write_zone_data, "0123456789 10123456789 20123456789 30123456789 "
+                               "40123456789 50123456789 60123456789 "
+                               "70123456789 80123456789 90123456789 100123456",
+              BUFFER_SIZE);
+      pthread_mutex_unlock(&write_zone_mutex);
       // fbputs(keystate, 6, 0);
       if (packet.keycode[0] == 0x29) { /* ESC pressed? */
         break;
@@ -196,6 +214,34 @@ void *drawing_thread_f(void *ignored) {
   while (!drawing_thread_terminate) {
     /* Draw dividing line */
     draw_layout();
+
+    // Now to split the data from the write zone into lines that will fit
+    char write_r_1[TEXT_COLS_ON_SCREEN + 1], write_r_2[TEXT_COLS_ON_SCREEN + 1];
+    write_r_1[0] = '>'; // Write point
+    write_r_1[TEXT_COLS_ON_SCREEN] = '\0';
+    write_r_2[TEXT_COLS_ON_SCREEN] = '\0';
+
+    pthread_mutex_lock(&write_zone_mutex);
+    // Compute string length
+    int write_str_length;
+    char *first_null = strchr(write_zone_data, '\0');
+    write_str_length = (first_null == NULL) ? 0 : first_null - write_zone_data;
+
+    // How many rows would it take to fit this on the screen?
+    // We lose a char on line 1 to >
+    int write_num_rows = write_str_length / 64 + 1;
+
+    if (DEBUG && write_str_length > 0) {
+      printf("Data in write zone: %s\n", write_zone_data);
+      printf("Data length: %d\n", write_str_length);
+      printf("Rows required: %d\n", write_num_rows);
+    }
+
+    pthread_mutex_unlock(&write_zone_mutex);
+
+    // Now draw the parts that fit in our two lines
+    fbputs(write_r_1, TEXT_ROWS_ON_SCREEN - 2, 0);
+    fbputs(write_r_2, TEXT_ROWS_ON_SCREEN - 1, 0);
   }
   return NULL;
 }
