@@ -60,6 +60,21 @@ int fbopen() {
   return 0;
 }
 
+// This should ONLY be called after fbopen()!
+screen_info get_fb_screen_info() {
+  if (framebuffer == NULL) {
+    fprintf(stderr, "Warning: get_fb_screen_info() called before fbopen()\n");
+  }
+
+  screen_info info;
+  info.fb_vinfo = &fb_vinfo;
+  info.fb_finfo = &fb_finfo;
+  info.font_width = FONT_WIDTH;
+  info.font_height = FONT_HEIGHT;
+
+  return info;
+}
+
 /*
  * Draw the given character at the given row/column.
  * fbopen() must be called first.
@@ -127,8 +142,8 @@ void fbclear() {
   long long num_pixels = fb_vinfo.xres * fb_vinfo.yres;
 
   for (long long p = 0; p < num_pixels; p++) {
-    // We iterate by chunks of BITS_PER_PIXEL / 8 bits per channel (=4) bytes at
-    // a time to account for the 4 channels
+    // We iterate by chunks of BITS_PER_PIXEL / 8 bits per channel (=4) bytes
+    // at a time to account for the 4 channels
     unsigned char *pixel = framebuffer + p * BITS_PER_PIXEL / 8;
     for (int i = 0; i < 4; i++)
       pixel[i] = 0;

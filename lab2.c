@@ -15,6 +15,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <linux/fb.h>
+
 /* Update SERVER_HOST to be the IP address of
  * the chat server you are connecting to
  */
@@ -40,17 +42,22 @@ int sockfd; /* Socket file descriptor */
 struct libusb_device_handle *keyboard;
 uint8_t endpoint_address;
 
-pthread_t network_thread;
+pthread_t network_thread, drawing_thread;
 void *network_thread_f(void *);
+void *drawing_thread_f(void *);
 
-/*
- * Runs a layout initialization: sets a dividing line down the third row from
- * the bottom
- */
-void draw_layout() {
-  for (int i = 0; i < 64; i++)
-    fbputchar(DIVIDING_LINE, 21, i);
-}
+volatile int drawing_thread_terminate = 0;
+pthread_mutex_t write_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t read_zone_mutes = PTHREAD_MUTEX_INITIALIZER;
+char *write_zone_data, *read_zone_data;
+screen_info screen;
+
+// Debug mode (adds some extra logs)
+#define DEBUG 1
+// How many rows of text we can fit on screen using fbputs
+int TEXT_ROWS_ON_SCREEN;
+// How many cols of text we can fit on screen using fpbuts
+int TEXT_COLS_ON_SCREEN;
 
 int main() {
   int err;
@@ -65,8 +72,6 @@ int main() {
     fprintf(stderr, "Error: Could not open framebuffer: %d\n", err);
     exit(1);
   }
-
-  fbclear();
 
   /* Open the keyboard */
   if ((keyboard = openkeyboard(&endpoint_address)) == NULL) {
@@ -95,11 +100,56 @@ int main() {
     exit(1);
   }
 
-  /* Start the network thread */
-  pthread_create(&network_thread, NULL, network_thread_f, NULL);
+  // Clear the screen
+  fbclear();
+  // Get screen info
+  screen = get_fb_screen_info();
 
-  /* Init layout */
-  draw_layout();
+  // Calculate TEXT_COLS_ON_SCREEN and TEXT_ROWS_ON_SCREEN
+  TEXT_ROWS_ON_SCREEN = screen.fb_vinfo->yres / (screen.font_height * 2);
+  TEXT_COLS_ON_SCREEN = screen.fb_vinfo->xres / (screen.font_width * 2);
+
+  // Log screen info in debug mode
+  if (DEBUG) {
+    printf("----SCREEN INFO----\n");
+    printf("Font Width: %d\n", screen.font_width);
+    printf("Font Height: %d\n", screen.font_height);
+    printf("X resolution: %d\n", screen.fb_vinfo->xres);
+    printf("Y resolution: %d\n", screen.fb_vinfo->yres);
+    printf("X offset: %d\n", screen.fb_vinfo->xoffset);
+    printf("Y offset: %d\n", screen.fb_vinfo->yoffset);
+    printf("Line length: %d\n", screen.fb_finfo->line_length);
+    printf("Text Rows on Screen: %d\n", TEXT_ROWS_ON_SCREEN);
+    printf("Text Columns on Screen: %d\n", TEXT_COLS_ON_SCREEN);
+    printf("\n");
+  }
+
+  /* Allocate memory for the read and write zones */
+
+  // We will allow the character to enter up to BUFFER_SIZE characters
+  // (including the \0) of write data in the writing panel on the bottom, as
+  // that's how much data we'll allow the user to send on the socket
+  if ((write_zone_data = malloc(BUFFER_SIZE * sizeof(char))) == NULL) {
+    fprintf(stderr, "Error: malloc() failed for write_zone_data.\n");
+    exit(1);
+  }
+
+  if ((read_zone_data = malloc(BUFFER_SIZE * sizeof(char))) == NULL) {
+    fprintf(stderr, "Error: malloc() failed for read_zone_data.\n");
+    exit(1);
+  }
+
+  /* Start the network thread */
+  if (pthread_create(&network_thread, NULL, network_thread_f, NULL) != 0) {
+    fprintf(stderr, "Error: pthread_create() failed for network thread.\n");
+    exit(1);
+  }
+
+  /* Start the drawing thread */
+  if (pthread_create(&drawing_thread, NULL, drawing_thread_f, NULL) != 0) {
+    fprintf(stderr, "Error: pthread_create() failed for drawing thread.\n");
+    exit(1);
+  }
 
   /* Look for and handle keypresses */
   for (;;) {
@@ -117,13 +167,37 @@ int main() {
     }
   }
 
-  /* Terminate the network thread */
+  /* Terminate the threads */
   pthread_cancel(network_thread);
+  drawing_thread_terminate = 1;
+  pthread_cancel(drawing_thread);
 
-  /* Wait for the network thread to finish */
+  /* Wait for the threads to finish */
   pthread_join(network_thread, NULL);
+  pthread_join(drawing_thread, NULL);
+
+  /* Free allocated memory */
+  free(write_zone_data);
+  free(read_zone_data);
 
   return 0;
+}
+
+/*
+ * Runs a layout initialization: sets a dividing line down the third row from
+ * the bottom
+ */
+void draw_layout() {
+  for (int i = 0; i < TEXT_COLS_ON_SCREEN; i++)
+    fbputchar(DIVIDING_LINE, TEXT_ROWS_ON_SCREEN - 3, i);
+}
+
+void *drawing_thread_f(void *ignored) {
+  while (!drawing_thread_terminate) {
+    /* Draw dividing line */
+    draw_layout();
+  }
+  return NULL;
 }
 
 void *network_thread_f(void *ignored) {

@@ -12,4 +12,15 @@ extern void fbputchar(char, int, int);
 extern void fbputs(const char *, int, int);
 extern void fbclear(void);
 
+// Contains everything lab2.c needs to know about the screen to avoid more
+// hard-coded magic numbers, eg the numbers of rows of text per screen
+typedef struct {
+  struct fb_var_screeninfo *fb_vinfo;
+  struct fb_fix_screeninfo *fb_finfo;
+  int font_width;
+  int font_height;
+} screen_info;
+
+extern screen_info get_fb_screen_info(void);
+
 #endif
