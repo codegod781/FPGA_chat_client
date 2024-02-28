@@ -61,6 +61,11 @@ int TEXT_COLS_ON_SCREEN;
 // The size of read_zone_data. To be calculated after the above are populated
 uint read_zone_size;
 
+char decode_keypress(uint8_t *keycode) {
+  // TODO: Implement
+  return 'A';
+}
+
 int main() {
   int err;
 
@@ -131,7 +136,7 @@ int main() {
   // We will allow the character to enter up to BUFFER_SIZE characters
   // (including the \0) of write data in the writing panel on the bottom, as
   // that's how much data we'll allow the user to send on the socket
-  if ((write_zone_data = malloc((BUFFER_SIZE) * sizeof(char))) == NULL) {
+  if ((write_zone_data = malloc(BUFFER_SIZE * sizeof(char))) == NULL) {
     fprintf(stderr, "Error: malloc() failed for write_zone_data.\n");
     exit(1);
   }
@@ -168,10 +173,14 @@ int main() {
     if (transferred == sizeof(packet)) {
       sprintf(keystate, "%02x %02x %02x", packet.modifiers, packet.keycode[0],
               packet.keycode[1]);
-      printf("%s\n", keystate);
 
       pthread_mutex_lock(&write_zone_mutex);
+
       // Update write_zone_data according to keyboard input here
+      char input = decode_keypress(packet.keycode);
+      if (DEBUG)
+        printf("%s (%c)\n", keystate, input);
+
       pthread_mutex_unlock(&write_zone_mutex);
       // fbputs(keystate, 6, 0);
       if (packet.keycode[0] == 0x29) { /* ESC pressed? */
