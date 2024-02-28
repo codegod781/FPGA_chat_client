@@ -142,19 +142,26 @@ int main() {
     exit(1);
   }
 
-  for (int i = 0; i < BUFFER_SIZE; i++) {
-    write_zone_data[i] = '\0'; // Init to all nulls
-  }
-
-  cursor_position = 0;
-
-  // The read zone can fit as many chars as there are rows x columns in te read
-  // zone, plus a null terminator
-  read_zone_size = TEXT_ROWS_ON_SCREEN * TEXT_COLS_ON_SCREEN * sizeof(char) - 1;
+  // The read zone can fit as many chars as there are rows x columns in the read
+  // zone, plus a null terminator per row
+  read_zone_size =
+      (TEXT_ROWS_ON_SCREEN + 1) * (TEXT_COLS_ON_SCREEN - 3) * sizeof(char);
   if ((read_zone_data = malloc(read_zone_size)) == NULL) {
     fprintf(stderr, "Error: malloc() failed for read_zone_data.\n");
+    free(write_zone_data);
     exit(1);
   }
+
+  for (int i = 0; i < BUFFER_SIZE; i++)
+    write_zone_data[i] = '\0'; // Init to all nulls
+  for (int i = 0; i < read_zone_size; i++)
+    read_zone_data[i] = '\0'; // Init to all nulls
+
+  printf("%s\n", read_zone_data);
+  printf("%s\n", read_zone_data + 65);
+  printf("%s\n", read_zone_data + 130);
+
+  cursor_position = 0;
 
   /* Start the network thread */
   if (pthread_create(&network_thread, NULL, network_thread_f, NULL) != 0) {
@@ -280,18 +287,26 @@ void *drawing_thread_f(void *ignored) {
     // Now draw the parts that fit in our two lines
     fbputs(write_r_1, TEXT_ROWS_ON_SCREEN - 2, 0);
     fbputs(write_r_2, TEXT_ROWS_ON_SCREEN - 1, 0);
+
+    // Drawing data from the read zone. This is done a lot more simply than the
+    // write zone. We let read_zone_data be cols - 3 rows of null-terminated
+    // lines of text, and draw them in that order. We let the networking code
+    // actually handle the splitting
+    for (int i = 0; i < TEXT_ROWS_ON_SCREEN - 3; i++)
+      fbputs(read_zone_data + i * (TEXT_COLS_ON_SCREEN + 1), i, 0);
   }
   return NULL;
 }
 
 void *network_thread_f(void *ignored) {
   char recvBuf[BUFFER_SIZE];
+  char messages[BUFFER_SIZE][TEXT_ROWS_ON_SCREEN - 3];
+
   int n;
   /* Receive data */
   while ((n = read(sockfd, &recvBuf, BUFFER_SIZE - 1)) > 0) {
     recvBuf[n] = '\0';
     printf("%s", recvBuf);
-    // fbputs(recvBuf, 8, 0);
   }
 
   return NULL;
