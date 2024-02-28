@@ -145,7 +145,7 @@ int main() {
   // The read zone can fit as many chars as there are rows x columns in the read
   // zone, plus a null terminator per row
   read_zone_size =
-      (TEXT_ROWS_ON_SCREEN + 1) * (TEXT_COLS_ON_SCREEN - 3) * sizeof(char);
+      (TEXT_ROWS_ON_SCREEN - 3) * (TEXT_COLS_ON_SCREEN + 1) * sizeof(char);
   if ((read_zone_data = malloc(read_zone_size)) == NULL) {
     fprintf(stderr, "Error: malloc() failed for read_zone_data.\n");
     free(write_zone_data);
@@ -300,6 +300,7 @@ void *drawing_thread_f(void *ignored) {
 
 void *network_thread_f(void *ignored) {
   char recvBuf[BUFFER_SIZE];
+  // Where we will stored messages before processing them into read_zone_data
   char messages[BUFFER_SIZE][TEXT_ROWS_ON_SCREEN - 3];
 
   int n;
