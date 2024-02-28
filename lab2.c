@@ -1,8 +1,8 @@
 /*
+ * lab2.c
+ * CSEE 4840 Lab 2 for Spring 2024
  *
- * CSEE 4840 Lab 2 for 2019
- *
- * Name/UNI: Please Changeto Yourname (pcy2301)
+ * Names/UNIs: Patrick Cronin (pjc2192), Kiryl Beliauski (kb3338), Daniel Ivanovich (dmi2115)
  */
 #include "fbputchar.h"
 #include <stdio.h>
