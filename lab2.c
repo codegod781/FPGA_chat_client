@@ -138,55 +138,63 @@ void init_keymap() {
 
 char decode_keypress(uint8_t *keycode) {
   int usb_code = (int)keycode[0]; // Simulating 'a' key
-  printf("The first value stored in the list: %d\n", usb_code);
   char output = key_map[usb_code];
-  printf("Character: %c\n", output);
   return output;
 }
 
-void write_char(char input, int cursor) {
+void write_char(char input) {
+  if (input == NULL)
+    return;
+
   int size = strlen(write_zone_data);
 
-  if (size < BUFFER_SIZE && cursor < BUFFER_SIZE) {
-    if (input == BACKSPACE) {
-      delete_char(cursor);
+  if (DEBUG) {
+    printf("Size: %d\n", size);
+    printf("Got keypress: %c\n", input);
+    printf("Cursor: %d\n", cursor_position);
+    printf("Write string: %s\n", write_zone_data);
+  }
+  
+  if (size < BUFFER_SIZE && cursor_position < BUFFER_SIZE) {
+    if (input == BACKSPACE && size > 0) {
+      delete_char();
+      printf("String after delete: %s\n", write_zone_data);
     } else if (input == LEFT) {
-      move_cursor_left(cursor);
+      move_cursor_left();
     } else if (input == RIGHT) {
-      move_cursor_right(cursor);
-    } else {
-      write_zone_data[cursor] = input;
-      cursor++;
+      move_cursor_right();
+    } else if (input != BACKSPACE) {
+      write_zone_data[cursor_position] = input;
+      cursor_position++;
     }
   } else {
     fprintf(stderr, "Buffer Overflow\n");
   }
 }
 
-void delete_char(int cursor) {
-  if (cursor > 0) { // Make sure cursor is not at the beginning
+void delete_char() {
+  if (cursor_position > 0) { // Make sure cursor is not at the beginning
     // Shift characters to the left starting from the cursor position
-    for (int i = cursor - 1; i < BUFFER_SIZE - 1; i++) {
+    for (int i = cursor_position - 1; i < BUFFER_SIZE; i++) {
       write_zone_data[i] = write_zone_data[i + 1];
       // Stop shifting when we encounter the null terminator
       if (write_zone_data[i] == '\0') {
         break;
       }
     }
-    (cursor)--; // Move cursor one position to the left
+    cursor_position--; // Move cursor one position to the left
+    fbclear();
   }
 }
 
-void move_cursor_left(int cursor) {
-  if (cursor > 0) {
-    cursor--; // Move cursor one position to the left
-  }
+void move_cursor_left() {
+  if (cursor_position > 0)
+    cursor_position--; // Move cursor one position to the left
 }
 
-void move_cursor_right(int cursor) {
-  if (write_zone_data[cursor] != '\0') {
-    cursor++; // Move cursor one position to the right
-  }
+void move_cursor_right() {
+  if (write_zone_data[cursor_position] != '\0')
+    cursor_position++; // Move cursor one position to the right
 }
 
 int main() {
@@ -308,6 +316,7 @@ int main() {
       sprintf(keystate, "%02x %02x %02x", packet.modifiers, packet.keycode[0],
               packet.keycode[1]);
 
+      printf("%s\n", keystate);
       pthread_mutex_lock(&write_zone_mutex);
 
       // Update write_zone_data according to keyboard input here
@@ -324,7 +333,7 @@ int main() {
       // negative, or let write_zone_data exceed BUFFER_SIZE.
       // write_zone_data[BUFFER_SIZE - 1] should ALWAYS be '\0' - don't let them
       // overwrite
-      write_char(input, cursor_position);
+      write_char(input);
 
       if (DEBUG)
         printf("%s (%c)\n", keystate, input);
