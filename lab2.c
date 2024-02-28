@@ -28,6 +28,12 @@
 #define MAP_SIZE 128
 
 #define DIVIDING_LINE '-'
+#define ENTER (char)128
+#define ESC (char)129
+#define BACKSPACE (char)130
+#define SPACE (char)131
+#define RIGHT (char)132
+#define LEFT (char)133
 
 /*
  * References:
@@ -55,7 +61,7 @@ char *write_zone_data, *read_zone_data;
 screen_info screen;
 
 // Debug mode (adds some extra logs)
-#define DEBUG 1
+#define DEBUG 0
 // How many rows of text we can fit on screen using fbputs
 int TEXT_ROWS_ON_SCREEN;
 // How many cols of text we can fit on screen using fpbuts
@@ -63,7 +69,7 @@ int TEXT_COLS_ON_SCREEN;
 // The size of read_zone_data. To be calculated after the above are populated
 uint read_zone_size;
 
-char *key_map[MAP_SIZE];
+char key_map[MAP_SIZE];
 
 void init_keymap() {
   // Initialize all elements of the keymap to NULL
@@ -71,134 +77,85 @@ void init_keymap() {
     key_map[i] = NULL;
   }
 
-  key_map[0x04] = "a"; // Keyboard a and A
-  key_map[0x05] = "b"; // Keyboard b and B
-  key_map[0x06] = "c"; // Keyboard c and C
-  key_map[0x07] = "d"; // Keyboard d and D
-  key_map[0x08] = "e"; // Keyboard e and E
-  key_map[0x09] = "f"; // Keyboard f and F
-  key_map[0x0a] = "g"; // Keyboard g and G
-  key_map[0x0b] = "h"; // Keyboard h and H
-  key_map[0x0c] = "i"; // Keyboard i and I
-  key_map[0x0d] = "j"; // Keyboard j and J
-  key_map[0x0e] = "k"; // Keyboard k and K
-  key_map[0x0f] = "l"; // Keyboard l and L
-  key_map[0x10] = "m"; // Keyboard m and M
-  key_map[0x11] = "n"; // Keyboard n and N
-  key_map[0x12] = "o"; // Keyboard o and O
-  key_map[0x13] = "p"; // Keyboard p and P
-  key_map[0x14] = "q"; // Keyboard q and Q
-  key_map[0x15] = "r"; // Keyboard r and R
-  key_map[0x16] = "s"; // Keyboard s and S
-  key_map[0x17] = "t"; // Keyboard t and T
-  key_map[0x18] = "u"; // Keyboard u and U
-  key_map[0x19] = "v"; // Keyboard v and V
-  key_map[0x1a] = "w"; // Keyboard w and W
-  key_map[0x1b] = "x"; // Keyboard x and X
-  key_map[0x1c] = "y"; // Keyboard y and Y
-  key_map[0x1d] = "z"; // Keyboard z and Z
+  key_map[0x04] = 'a'; // Keyboard a and A
+  key_map[0x05] = 'b'; // Keyboard b and B
+  key_map[0x06] = 'c'; // Keyboard c and C
+  key_map[0x07] = 'd'; // Keyboard d and D
+  key_map[0x08] = 'e'; // Keyboard e and E"
+  key_map[0x09] = 'f'; // Keyboard f and F"
+  key_map[0x0a] = 'g'; // Keyboard g and G"
+  key_map[0x0b] = 'h'; // Keyboard h and H"
+  key_map[0x0c] = 'i'; // Keyboard i and I"
+  key_map[0x0d] = 'j'; // Keyboard j and J"
+  key_map[0x0e] = 'k'; // Keyboard k and K"
+  key_map[0x0f] = 'l'; // Keyboard l and L"
+  key_map[0x10] = 'm'; // Keyboard m and M"
+  key_map[0x11] = 'n'; // Keyboard n and N
+  key_map[0x12] = 'o'; // Keyboard o and O
+  key_map[0x13] = 'p'; // Keyboard p and P
+  key_map[0x14] = 'q'; // Keyboard q and Q
+  key_map[0x15] = 'r'; // Keyboard r and R
+  key_map[0x16] = 's'; // Keyboard s and S
+  key_map[0x17] = 't'; // Keyboard t and T
+  key_map[0x18] = 'u'; // Keyboard u and U
+  key_map[0x19] = 'v'; // Keyboard v and V
+  key_map[0x1a] = 'w'; // Keyboard w and W
+  key_map[0x1b] = 'x'; // Keyboard x and X
+  key_map[0x1c] = 'y'; // Keyboard y and Y
+  key_map[0x1d] = 'z'; // Keyboard z and Z
 
-  key_map[0x1e] = "1"; // Keyboard 1 and !
-  key_map[0x1f] = "2"; // Keyboard 2 and @
-  key_map[0x20] = "3"; // Keyboard 3 and #
-  key_map[0x21] = "4"; // Keyboard 4 and $
-  key_map[0x22] = "5"; // Keyboard 5 and %
-  key_map[0x23] = "6"; // Keyboard 6 and ^
-  key_map[0x24] = "7"; // Keyboard 7 and &
-  key_map[0x25] = "8"; // Keyboard 8 and *
-  key_map[0x26] = "9"; // Keyboard 9 and (
-  key_map[0x27] = "0"; // Keyboard 0 and )
+  key_map[0x1e] = '1'; // Keyboard 1 and !
+  key_map[0x1f] = '2'; // Keyboard 2 and @
+  key_map[0x20] = '3'; // Keyboard 3 and #
+  key_map[0x21] = '4'; // Keyboard 4 and $
+  key_map[0x22] = '5'; // Keyboard 5 and %
+  key_map[0x23] = '6'; // Keyboard 6 and ^
+  key_map[0x24] = '7'; // Keyboard 7 and &
+  key_map[0x25] = '8'; // Keyboard 8 and *
+  key_map[0x26] = '9'; // Keyboard 9 and (
+  key_map[0x27] = '0'; // Keyboard 0 and )
 
-  key_map[0x28] = "ENTER";     // Keyboard Return (ENTER)
-  key_map[0x29] = "ESC";       // Keyboard ESCAPE
-  key_map[0x2a] = "BACKSPACE"; // Keyboard DELETE (Backspace)
-  key_map[0x2b] = "TAB";       // Keyboard Tab
-  key_map[0x2c] = "SPACE";     // Keyboard Spacebar
-  key_map[0x2d] = "-";         // Keyboard - and _
-  key_map[0x2e] = "=";         // Keyboard = and +
-  key_map[0x2f] = "[";         // Keyboard [ and {
-  key_map[0x30] = "]";         // Keyboard ] and }
-  key_map[0x31] = "\\";        // Keyboard \ and |
-  key_map[0x32] = "#";         // Keyboard Non-US # and ~
-  key_map[0x33] = ";";         // Keyboard ; and :
-  key_map[0x34] = "'";         // Keyboard ' and "
-  key_map[0x35] = "`";         // Keyboard ` and ~
-  key_map[0x36] = ",";         // Keyboard , and <
-  key_map[0x37] = ".";         // Keyboard . and >
-  key_map[0x38] = "/";         // Keyboard / and ?
-  key_map[0x39] = "CAPSLOCK";  // Keyboard Caps Lock
+  key_map[0x28] = ENTER;     // Keyboard Return (ENTER)
+  key_map[0x29] = ESC;       // Keyboard ESCAPE
+  key_map[0x2a] = BACKSPACE; // Keyboard DELETE (Backspace)
+  key_map[0x2c] = ' ';       // Keyboard Spacebar
+  key_map[0x2d] = '-';       // Keyboard - and _
+  key_map[0x2e] = '=';       // Keyboard = and +
+  key_map[0x2f] = '[';       // Keyboard [ and {
+  key_map[0x30] = ']';       // Keyboard ] and }
+  key_map[0x31] = '\\';      // Keyboard \ and |
+  key_map[0x32] = '#';       // Keyboard Non-US # and ~
+  key_map[0x33] = ';';       // Keyboard ; and :
+  key_map[0x34] = '\'';      // Keyboard ' and '
+  key_map[0x35] = '`';       // Keyboard ` and ~
+  key_map[0x36] = ',';       // Keyboard , and <
+  key_map[0x37] = '.';       // Keyboard . and >
+  key_map[0x38] = '/';       // Keyboard / and ?
 
-  key_map[0x3a] = "F1";  // Keyboard F1
-  key_map[0x3b] = "F2";  // Keyboard F2
-  key_map[0x3c] = "F3";  // Keyboard F3
-  key_map[0x3d] = "F4";  // Keyboard F4
-  key_map[0x3e] = "F5";  // Keyboard F5
-  key_map[0x3f] = "F6";  // Keyboard F6
-  key_map[0x40] = "F7";  // Keyboard F7
-  key_map[0x41] = "F8";  // Keyboard F8
-  key_map[0x42] = "F9";  // Keyboard F9
-  key_map[0x43] = "F10"; // Keyboard F10
-  key_map[0x44] = "F11"; // Keyboard F11
-  key_map[0x45] = "F12"; // Keyboard F12
-
-  key_map[0x46] = "SYSRQ";      // Keyboard Print Screen
-  key_map[0x47] = "SCROLLLOCK"; // Keyboard Scroll Lock
-  key_map[0x48] = "PAUSE";      // Keyboard Pause
-  key_map[0x49] = "INSERT";     // Keyboard Insert
-  key_map[0x4a] = "HOME";       // Keyboard Home
-  key_map[0x4b] = "PAGEUP";     // Keyboard Page Up
-  key_map[0x4c] = "DELETE";     // Keyboard Delete Forward
-  key_map[0x4d] = "END";        // Keyboard End
-  key_map[0x4e] = "PAGEDOWN";   // Keyboard Page Down
-  key_map[0x4f] = "RIGHT";      // Keyboard Right Arrow
-  key_map[0x50] = "LEFT";       // Keyboard Left Arrow
-  key_map[0x51] = "DOWN";       // Keyboard Down Arrow
-  key_map[0x52] = "UP";         // Keyboard Up Arrow
-
-  key_map[0x53] = "NUMLOCK";    // Keyboard Num Lock and Clear
-  key_map[0x54] = "KPSLASH";    // Keypad /
-  key_map[0x55] = "KPASTERISK"; // Keypad *
-  key_map[0x56] = "KPMINUS";    // Keypad -
-  key_map[0x57] = "KPPLUS";     // Keypad +
-  key_map[0x58] = "KPENTER";    // Keypad ENTER
-  key_map[0x59] = "KP1";        // Keypad 1 and End
-  key_map[0x5a] = "KP2";        // Keypad 2 and Down Arrow
-  key_map[0x5b] = "KP3";        // Keypad 3 and PageDn
-  key_map[0x5c] = "KP4";        // Keypad 4 and Left Arrow
-  key_map[0x5d] = "KP5";        // Keypad 5
-  key_map[0x5e] = "KP6";        // Keypad 6 and Right Arrow
-  key_map[0x5f] = "KP7";        // Keypad 7 and Home
-  key_map[0x60] = "KP8";        // Keypad 8 and Up Arrow
-  key_map[0x61] = "KP9";        // Keypad 9 and Page Up
-  key_map[0x62] = "KP0";        // Keypad 0 and Insert
-  key_map[0x63] = "KPDOT";      // Keypad . and Delete
-
-  key_map[0x64] = "102ND";   // Keyboard Non-US \ and |
-  key_map[0x65] = "COMPOSE"; // Keyboard Application
-  key_map[0x66] = "POWER";   // Keyboard Power
-  key_map[0x67] = "KPEQUAL"; // Keypad =
+  key_map[0x4f] = RIGHT; // Keyboard Right Arrow
+  key_map[0x50] = LEFT;  // Keyboard Left Arrow
 }
 
-char *decode_keypress(int *keycode) {
+char decode_keypress(uint8_t *keycode) {
   int usb_code = (int)keycode[0]; // Simulating 'a' key
   printf("The first value stored in the list: %d\n", usb_code);
-  char *output = key_map[usb_code];
-  printf("Character: %s\n", output);
+  char output = key_map[usb_code];
+  printf("Character: %c\n", output);
   return output;
 }
 
-void write_char(char *input, int cursor) {
+void write_char(char input, int cursor) {
   int size = strlen(write_zone_data);
 
   if (size < BUFFER_SIZE && cursor < BUFFER_SIZE) {
-    if (strcmp(input, "BACKSPACE") == 0) {
+    if (input == BACKSPACE) {
       delete_char(cursor);
-    } else if (strcmp(input, "LEFT") == 0) {
+    } else if (input == LEFT) {
       move_cursor_left(cursor);
-    } else if (strcmp(input, "RIGHT") == 0) {
+    } else if (input == RIGHT) {
       move_cursor_right(cursor);
     } else {
-      write_zone_data[cursor] = *input;
+      write_zone_data[cursor] = input;
       cursor++;
     }
   } else {
@@ -342,17 +299,6 @@ int main() {
 
   init_keymap();
 
-  int *ptr;
-
-  // Allocate memory for the integer array
-  ptr = (int *)malloc(3 * sizeof(int));
-
-  // Check if memory allocation was successful
-  if (ptr == NULL) {
-    printf("Memory allocation failed\n");
-    return 1; // Exit with error
-  }
-
   /* Look for and handle keypresses */
   for (;;) {
     libusb_interrupt_transfer(keyboard, endpoint_address,
@@ -365,7 +311,7 @@ int main() {
       pthread_mutex_lock(&write_zone_mutex);
 
       // Update write_zone_data according to keyboard input here
-      char *input = decode_keypress(packet.keycode);
+      char input = decode_keypress(packet.keycode);
 
       // If input is a normal ascii character to add, add it to write_zone_data
       // at index cursor_position
