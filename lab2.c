@@ -24,6 +24,7 @@
 #define SERVER_HOST "128.59.19.114"
 #define SERVER_PORT 42000
 
+#define WRITE_SIZE 64
 #define BUFFER_SIZE 128
 #define MAP_SIZE 128
 
@@ -137,8 +138,15 @@ void init_keymap() {
 }
 
 char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
-  int usb_code = (int)keycode[0]; // Simulating 'a' key
-  char output = key_map[usb_code];
+  printf("0: %d\n1: %d\n", keycode[0], keycode[1]);
+  if (keycode[0] != 0 && keycode[1] != 0)
+    return NULL; // Skip if two pressed at once
+
+  char output = key_map[(int)keycode[0]];
+
+  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22)
+    output = toupper(output);
+
   return output;
 }
 
@@ -155,7 +163,7 @@ void write_char(char input) {
     printf("Write string: %s\n", write_zone_data);
   }
 
-  if (size < BUFFER_SIZE && cursor_position < BUFFER_SIZE) {
+  if (size < WRITE_SIZE && cursor_position < WRITE_SIZE) {
     if (input == BACKSPACE && size > 0) {
       delete_char();
       printf("String after delete: %s\n", write_zone_data);
@@ -175,7 +183,7 @@ void write_char(char input) {
 void delete_char() {
   if (cursor_position > 0) { // Make sure cursor is not at the beginning
     // Shift characters to the left starting from the cursor position
-    for (int i = cursor_position - 1; i < BUFFER_SIZE; i++) {
+    for (int i = cursor_position - 1; i < WRITE_SIZE; i++) {
       write_zone_data[i] = write_zone_data[i + 1];
       // Stop shifting when we encounter the null terminator
       if (write_zone_data[i] == '\0') {
@@ -264,10 +272,10 @@ int main() {
 
   /* Allocate memory for the read and write zones */
 
-  // We will allow the character to enter up to BUFFER_SIZE characters
+  // We will allow the character to enter up to WRITE_SIZE characters
   // (including the \0) of write data in the writing panel on the bottom, as
   // that's how much data we'll allow the user to send on the socket
-  if ((write_zone_data = malloc(BUFFER_SIZE * sizeof(char))) == NULL) {
+  if ((write_zone_data = malloc(WRITE_SIZE * sizeof(char))) == NULL) {
     fprintf(stderr, "Error: malloc() failed for write_zone_data.\n");
     exit(1);
   }
@@ -282,7 +290,7 @@ int main() {
     exit(1);
   }
 
-  for (int i = 0; i < BUFFER_SIZE; i++)
+  for (int i = 0; i < WRITE_SIZE; i++)
     write_zone_data[i] = '\0'; // Init to all nulls
   for (int i = 0; i < read_zone_size; i++)
     read_zone_data[i] = '\0'; // Init to all nulls
@@ -330,24 +338,34 @@ int main() {
       // If the input is something we agree means left arrow, cursor_position--
       // if the input is something we agree means right arrow, cursor_position++
       // Don't let cursor position get away from the last character, become
-      // negative, or let write_zone_data exceed BUFFER_SIZE.
-      // write_zone_data[BUFFER_SIZE - 1] should ALWAYS be '\0' - don't let them
+      // negative, or let write_zone_data exceed WRITE_SIZE.
+      // write_zone_data[WRITE_SIZE - 1] should ALWAYS be '\0' - don't let them
       // overwrite
-      if (input == ENTER)
-      {
-        // Send the message to the server
-        if (send(sockfd, write_zone_data, strlen(write_zone_data), 0) < 0)
-        {
-          perror("Error sending message to server");
+      if (input == ENTER) {
+        // Send the message to the server. We need to add a '\n' first
+        char *message;
+
+        if ((message = malloc(WRITE_SIZE + 1)) == NULL)
+          fprintf(stderr, "Error: malloc() error when building message.\n");
+        else {
+          strncpy(message, write_zone_data, WRITE_SIZE);
+          message[strlen(write_zone_data)] = '\n';
+
+          if (write(sockfd, message, strlen(message)) != strlen(message))
+            fprintf(stderr,
+                    "Error: write() error sending message to server.\n");
+          else {
+            fbclear();
+
+            // Clear write_zone_data after sending
+            memset(write_zone_data, 0, WRITE_SIZE);
+            cursor_position = 0;
+          }
+
+          free(message);
         }
-        // Clear write_zone_data after sending
-        memset(write_zone_data, 0, BUFFER_SIZE);
-        cursor_position = 0;
-      }
-      else
-      {
+      } else
         write_char(input);
-      }
 
       if (DEBUG)
         printf("%s (%c)\n", keystate, input);
