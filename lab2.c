@@ -301,13 +301,33 @@ void *drawing_thread_f(void *ignored) {
 void *network_thread_f(void *ignored) {
   char recvBuf[BUFFER_SIZE];
   // Where we will stored messages before processing them into read_zone_data
-  char messages[BUFFER_SIZE][TEXT_ROWS_ON_SCREEN - 3];
+  char messages[TEXT_ROWS_ON_SCREEN - 3][BUFFER_SIZE];
 
-  int n;
+  int n, num_messages = 0;
   /* Receive data */
   while ((n = read(sockfd, &recvBuf, BUFFER_SIZE - 1)) > 0) {
     recvBuf[n] = '\0';
-    printf("%s", recvBuf);
+
+    if (DEBUG)
+      printf("Got message: %s\n", recvBuf);
+
+    if (num_messages < TEXT_ROWS_ON_SCREEN - 3)
+      strncpy(messages[num_messages++], recvBuf, BUFFER_SIZE - 1);
+    else {
+      // Shift everything up one and delete the oldest message
+      for (int i = 0; i < TEXT_ROWS_ON_SCREEN - 4; i++)
+        strncpy(messages[i], messages[i + 1], BUFFER_SIZE - 1);
+
+      // Add new message
+      strncpy(messages[TEXT_ROWS_ON_SCREEN - 4], recvBuf, BUFFER_SIZE - 1);
+    }
+
+    if (DEBUG) {
+      printf("message cache:\n");
+      for (int i = 0; i < num_messages; i++) {
+        printf("index %d: %s\n", i, messages[i]);
+      }
+    }
   }
 
   return NULL;
