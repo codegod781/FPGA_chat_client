@@ -24,7 +24,7 @@
 #define SERVER_HOST "128.59.19.114"
 #define SERVER_PORT 42000
 
-#define WRITE_SIZE 140
+#define WRITE_SIZE 200
 #define BUFFER_SIZE 128
 #define MAP_SIZE 128
 
@@ -138,7 +138,6 @@ void init_keymap() {
 }
 
 char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
-  printf("0: %d\n1: %d\n", keycode[0], keycode[1]);
   if (keycode[0] != 0 && keycode[1] != 0)
     return NULL; // Skip if two pressed at once
 
@@ -163,7 +162,7 @@ void write_char(char input) {
     printf("Write string: %s\n", write_zone_data);
   }
 
-  if (size < WRITE_SIZE && cursor_position < WRITE_SIZE) {
+  if (size < WRITE_SIZE && cursor_position < WRITE_SIZE - 1) {
     if (input == BACKSPACE && size > 0) {
       delete_char();
       printf("String after delete: %s\n", write_zone_data);
@@ -176,6 +175,7 @@ void write_char(char input) {
       cursor_position++;
     }
   } else {
+    cursor_position = WRITE_SIZE - 2;
     fprintf(stderr, "Buffer Overflow\n");
   }
 }
@@ -300,7 +300,8 @@ int main() {
   printf("%s\n", read_zone_data + 130);
 
   cursor_position = 0;
-  prev_num_lines = 0; // How many lines were used in the write zone at the last keypress
+  prev_num_lines =
+      0; // How many lines were used in the write zone at the last keypress
 
   /* Start the network thread */
   if (pthread_create(&network_thread, NULL, network_thread_f, NULL) != 0) {
@@ -318,9 +319,17 @@ int main() {
 
   /* Look for and handle keypresses */
   for (;;) {
-    libusb_interrupt_transfer(keyboard, endpoint_address,
-                              (unsigned char *)&packet, sizeof(packet),
-                              &transferred, 0);
+    int result = libusb_interrupt_transfer(keyboard, endpoint_address,
+                                           (unsigned char *)&packet,
+                                           sizeof(packet), &transferred, 100);
+    if (result == LIBUSB_ERROR_TIMEOUT) {
+      // Pressing and holding (or holding nothing)
+      char input = decode_keypress(packet.keycode, packet.modifiers);
+      write_char(input);
+      continue;
+    } else if (result < 0) {
+      fprintf(stderr, "error ahhh");
+    }
     if (transferred == sizeof(packet)) {
       sprintf(keystate, "%02x %02x %02x", packet.modifiers, packet.keycode[0],
               packet.keycode[1]);
@@ -401,7 +410,7 @@ int main() {
  */
 void draw_layout() {
   for (int i = 0; i < TEXT_COLS_ON_SCREEN; i++)
-    fbputchar(DIVIDING_LINE, TEXT_ROWS_ON_SCREEN - 3, i);
+    fbputchar(DIVIDING_LINE, TEXT_ROWS_ON_SCREEN - 3, i, 0);
 }
 
 void *drawing_thread_f(void *ignored) {
@@ -456,11 +465,29 @@ void *drawing_thread_f(void *ignored) {
     // Do we need to do a screen clear?
     if (prev_num_lines != write_num_rows)
       fbclear();
-      
+
     prev_num_lines = write_num_rows;
+
+    int cursor_idx_on_screen = cursor_position - first_char_displayed;
+    char cursor_char = NULL;
+
+    if (cursor_position > 0 && cursor_position < WRITE_SIZE)
+      cursor_char = write_zone_data[cursor_position - 1];
+
     // Now draw the parts that fit in our two lines
-    fbputs(write_r_1, TEXT_ROWS_ON_SCREEN - 2, 0);
-    fbputs(write_r_2, TEXT_ROWS_ON_SCREEN - 1, 0);
+    for (int i = 0; i < TEXT_COLS_ON_SCREEN; i++) {
+      if (write_r_1[i] != '\0')
+        if ((first_char_displayed == 0 && i == 0) ||
+            (i != cursor_idx_on_screen))
+          fbputchar(write_r_1[i], TEXT_ROWS_ON_SCREEN - 2, i, 0);
+      if (write_r_2[i] != '\0')
+        fbputchar(write_r_2[i], TEXT_ROWS_ON_SCREEN - 1, i, 0);
+    }
+
+    // fprintf(stderr, "Cursor position: %d, cursor index: %d, char: %c\n",
+    // cursor_position, cursor_idx_on_screen, cursor_char);
+    if (cursor_char != NULL)
+      fbputchar(cursor_char, TEXT_ROWS_ON_SCREEN - 2, 1, 1);
 
     // Drawing data from the read zone. This is done a lot more simply than the
     // write zone. We let read_zone_data be cols - 3 rows of null-terminated

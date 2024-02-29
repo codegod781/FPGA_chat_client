@@ -79,7 +79,7 @@ screen_info get_fb_screen_info() {
  * Draw the given character at the given row/column.
  * fbopen() must be called first.
  */
-void fbputchar(char c, int row, int col) {
+void fbputchar(char c, int row, int col, int is_cursor) {
   int x, y;
   unsigned char pixels, *pixelp = font + FONT_HEIGHT * c;
   unsigned char mask;
@@ -94,9 +94,9 @@ void fbputchar(char c, int row, int col) {
     mask = 0x80;
     for (x = 0; x < FONT_WIDTH; x++) {
       if (pixels & mask) {
-        pixel[0] = 255; /* Red */
-        pixel[1] = 255; /* Green */
-        pixel[2] = 255; /* Blue */
+        pixel[0] = is_cursor ? 0 : 255; /* Blue */
+        pixel[1] = is_cursor ? 0 : 255; /* Green */
+        pixel[2] = is_cursor ? 255 : 255; /* Red */
         pixel[3] = 0;
       } else {
         pixel[0] = 0;
@@ -106,9 +106,9 @@ void fbputchar(char c, int row, int col) {
       }
       pixel += 4;
       if (pixels & mask) {
-        pixel[0] = 255; /* Red */
-        pixel[1] = 255; /* Green */
-        pixel[2] = 255; /* Blue */
+        pixel[0] = is_cursor ? 0 : 255; /* Blue */
+        pixel[1] = is_cursor ? 0 : 255; /* Green */
+        pixel[2] = is_cursor ? 255 : 255; /* Red */
         pixel[3] = 0;
       } else {
         pixel[0] = 0;
@@ -131,7 +131,7 @@ void fbputchar(char c, int row, int col) {
 void fbputs(const char *s, int row, int col) {
   char c;
   while ((c = *s++) != 0)
-    fbputchar(c, row, col++);
+    fbputchar(c, row, col++, 0);
 }
 
 /*
