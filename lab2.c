@@ -321,20 +321,20 @@ int main() {
   for (;;) {
     int result = libusb_interrupt_transfer(keyboard, endpoint_address,
                                            (unsigned char *)&packet,
-                                           sizeof(packet), &transferred, 100);
+                                           sizeof(packet), &transferred, 250);
     if (result == LIBUSB_ERROR_TIMEOUT) {
       // Pressing and holding (or holding nothing)
       char input = decode_keypress(packet.keycode, packet.modifiers);
       write_char(input);
       continue;
     } else if (result < 0) {
-      fprintf(stderr, "error ahhh");
+      fprintf(stderr, "Error: error encountered in libusb read.\n");
+      continue;
     }
     if (transferred == sizeof(packet)) {
       sprintf(keystate, "%02x %02x %02x", packet.modifiers, packet.keycode[0],
               packet.keycode[1]);
 
-      printf("%s\n", keystate);
       pthread_mutex_lock(&write_zone_mutex);
 
       // Update write_zone_data according to keyboard input here
@@ -451,6 +451,8 @@ void *drawing_thread_f(void *ignored) {
       strncpy(write_r_2,
               write_zone_data + (write_num_rows - 1) * TEXT_COLS_ON_SCREEN - 1,
               TEXT_COLS_ON_SCREEN);
+    else
+      strncpy(write_r_2, "\0", TEXT_COLS_ON_SCREEN); // Fill it with 0s
 
     if (DEBUG && write_str_length > 0) {
       printf("Data in write zone: %s\n", write_zone_data);
@@ -463,31 +465,53 @@ void *drawing_thread_f(void *ignored) {
     pthread_mutex_unlock(&write_zone_mutex);
 
     // Do we need to do a screen clear?
-    if (prev_num_lines != write_num_rows)
+    if (prev_num_lines != write_num_rows) {
+      if (DEBUG)
+        printf("prev_num_lines (%d) != write_num_rows (%d)\n", prev_num_lines,
+               write_num_rows);
       fbclear();
-
-    prev_num_lines = write_num_rows;
+      prev_num_lines = write_num_rows;
+    }
 
     int cursor_idx_on_screen = cursor_position - first_char_displayed;
+    if (first_char_displayed != 0)
+      cursor_idx_on_screen--; // There's no longer the >
     char cursor_char = NULL;
 
     if (cursor_position > 0 && cursor_position < WRITE_SIZE)
       cursor_char = write_zone_data[cursor_position - 1];
 
-    // Now draw the parts that fit in our two lines
-    for (int i = 0; i < TEXT_COLS_ON_SCREEN; i++) {
-      if (write_r_1[i] != '\0')
-        if ((first_char_displayed == 0 && i == 0) ||
-            (i != cursor_idx_on_screen))
-          fbputchar(write_r_1[i], TEXT_ROWS_ON_SCREEN - 2, i, 0);
-      if (write_r_2[i] != '\0')
-        fbputchar(write_r_2[i], TEXT_ROWS_ON_SCREEN - 1, i, 0);
+    for (int i = 0; i < 2 * TEXT_COLS_ON_SCREEN; i++) {
+      char to_write;
+      if (i < TEXT_COLS_ON_SCREEN)
+        to_write = write_r_1[i];
+      else
+        to_write = write_r_2[i - TEXT_COLS_ON_SCREEN];
+
+      // Skip this char if needed
+      if (cursor_idx_on_screen == i && !(first_char_displayed == 0 && i == 0))
+          to_write = '\0';
+
+      if (to_write != '\0') {
+        if (i < TEXT_COLS_ON_SCREEN)
+          fbputchar(to_write, TEXT_ROWS_ON_SCREEN - 2, i, 0);
+        else
+          fbputchar(to_write, TEXT_ROWS_ON_SCREEN - 1, i - TEXT_COLS_ON_SCREEN,
+                    0);
+      }
     }
 
-    // fprintf(stderr, "Cursor position: %d, cursor index: %d, char: %c\n",
-    // cursor_position, cursor_idx_on_screen, cursor_char);
-    if (cursor_char != NULL)
-      fbputchar(cursor_char, TEXT_ROWS_ON_SCREEN - 2, 1, 1);
+    if (strlen(write_zone_data) == 0) {
+      fbputchar('_', TEXT_ROWS_ON_SCREEN - 2, 1, 1);
+    } else {
+      if (cursor_char != '\0')
+        fbputchar(cursor_char,
+                  TEXT_ROWS_ON_SCREEN -
+                      (2 - (cursor_idx_on_screen / TEXT_COLS_ON_SCREEN)),
+                  cursor_idx_on_screen % TEXT_COLS_ON_SCREEN, 1);
+    }
+    fprintf(stderr, "First displayed: %d, Cursor position: %d, cursor index: %d, char: %c\n",
+            first_char_displayed, cursor_position, cursor_idx_on_screen, cursor_char);
 
     // Drawing data from the read zone. This is done a lot more simply than the
     // write zone. We let read_zone_data be cols - 3 rows of null-terminated
