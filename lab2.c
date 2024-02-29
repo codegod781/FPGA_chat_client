@@ -24,7 +24,7 @@
 #define SERVER_HOST "128.59.19.114"
 #define SERVER_PORT 42000
 
-#define WRITE_SIZE 200
+#define WRITE_SIZE 300 // Message size limit
 #define BUFFER_SIZE 128
 #define MAP_SIZE 128
 
@@ -57,7 +57,7 @@ void *drawing_thread_f(void *);
 volatile int drawing_thread_terminate = 0;
 pthread_mutex_t write_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t read_zone_mutex = PTHREAD_MUTEX_INITIALIZER;
-int cursor_position, prev_num_lines;
+int cursor_position, prev_num_lines, cursor_idx_on_screen;
 char *write_zone_data, *read_zone_data;
 screen_info screen;
 
@@ -143,8 +143,11 @@ char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
 
   char output = key_map[(int)keycode[0]];
 
-  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22)
+  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22) {
+    // if (keycode is a-z)
     output = toupper(output);
+    // else if (keycode + 50 < MAP SIZE), output = key_map[keycode+50]
+  }
 
   return output;
 }
@@ -165,7 +168,8 @@ void write_char(char input) {
   if (size < WRITE_SIZE && cursor_position < WRITE_SIZE - 1) {
     if (input == BACKSPACE && size > 0) {
       delete_char();
-      printf("String after delete: %s\n", write_zone_data);
+      if (DEBUG)
+        printf("String after delete: %s\n", write_zone_data);
     } else if (input == LEFT) {
       move_cursor_left();
     } else if (input == RIGHT) {
@@ -196,7 +200,7 @@ void delete_char() {
 }
 
 void move_cursor_left() {
-  if (cursor_position > 0)
+  if (cursor_position > 0 && cursor_idx_on_screen > 0)
     cursor_position--; // Move cursor one position to the left
 }
 
@@ -300,8 +304,9 @@ int main() {
   printf("%s\n", read_zone_data + 130);
 
   cursor_position = 0;
-  prev_num_lines =
-      0; // How many lines were used in the write zone at the last keypress
+  cursor_idx_on_screen = 0; // Used to position the cursor across pages
+  // How many lines were used in the write zone at the last keypress
+  prev_num_lines = 0;
 
   /* Start the network thread */
   if (pthread_create(&network_thread, NULL, network_thread_f, NULL) != 0) {
@@ -324,8 +329,10 @@ int main() {
                                            sizeof(packet), &transferred, 250);
     if (result == LIBUSB_ERROR_TIMEOUT) {
       // Pressing and holding (or holding nothing)
+      pthread_mutex_lock(&write_zone_mutex);
       char input = decode_keypress(packet.keycode, packet.modifiers);
       write_char(input);
+      pthread_mutex_unlock(&write_zone_mutex);
       continue;
     } else if (result < 0) {
       fprintf(stderr, "Error: error encountered in libusb read.\n");
@@ -352,19 +359,21 @@ int main() {
       // write_zone_data[WRITE_SIZE - 1] should ALWAYS be '\0' - don't let them
       // overwrite
       if (input == ENTER) {
-        // Send the message to the server. We need to add a '\n' first
+        // Send the message to the server. We need to add a carriage return first
         char *message;
 
-        if ((message = malloc(WRITE_SIZE + 1)) == NULL)
+        if ((message = malloc(WRITE_SIZE + 2)) == NULL)
           fprintf(stderr, "Error: malloc() error when building message.\n");
         else {
           strncpy(message, write_zone_data, WRITE_SIZE);
-          message[strlen(write_zone_data)] = '\n';
+          message[strlen(write_zone_data)] = '\r';
+          message[strlen(write_zone_data + 1)] = '\n';
 
           if (write(sockfd, message, strlen(message)) != strlen(message))
             fprintf(stderr,
                     "Error: write() error sending message to server.\n");
           else {
+            printf("Message successfully sent!\n");
             fbclear();
 
             // Clear write_zone_data after sending
@@ -473,7 +482,7 @@ void *drawing_thread_f(void *ignored) {
       prev_num_lines = write_num_rows;
     }
 
-    int cursor_idx_on_screen = cursor_position - first_char_displayed;
+    cursor_idx_on_screen = cursor_position - first_char_displayed;
     if (first_char_displayed != 0)
       cursor_idx_on_screen--; // There's no longer the >
     char cursor_char = NULL;
@@ -490,7 +499,7 @@ void *drawing_thread_f(void *ignored) {
 
       // Skip this char if needed
       if (cursor_idx_on_screen == i && !(first_char_displayed == 0 && i == 0))
-          to_write = '\0';
+        to_write = '\0';
 
       if (to_write != '\0') {
         if (i < TEXT_COLS_ON_SCREEN)
@@ -505,13 +514,16 @@ void *drawing_thread_f(void *ignored) {
       fbputchar('_', TEXT_ROWS_ON_SCREEN - 2, 1, 1);
     } else {
       if (cursor_char != '\0')
-        fbputchar(cursor_char,
+        fbputchar(cursor_char == ' ' ? '_' : cursor_char,
                   TEXT_ROWS_ON_SCREEN -
                       (2 - (cursor_idx_on_screen / TEXT_COLS_ON_SCREEN)),
                   cursor_idx_on_screen % TEXT_COLS_ON_SCREEN, 1);
     }
-    fprintf(stderr, "First displayed: %d, Cursor position: %d, cursor index: %d, char: %c\n",
-            first_char_displayed, cursor_position, cursor_idx_on_screen, cursor_char);
+
+    // fprintf(stderr, "First displayed: %d, Cursor position: %d, cursor index:
+    // %d, char: %c\n",
+    // first_char_displayed, cursor_position, cursor_idx_on_screen,
+    // cursor_char);
 
     // Drawing data from the read zone. This is done a lot more simply than the
     // write zone. We let read_zone_data be cols - 3 rows of null-terminated
@@ -525,34 +537,42 @@ void *drawing_thread_f(void *ignored) {
 
 void *network_thread_f(void *ignored) {
   char recvBuf[BUFFER_SIZE];
-  // Where we will stored messages before processing them into read_zone_data
-  char messages[TEXT_ROWS_ON_SCREEN - 3][BUFFER_SIZE];
 
-  int n, num_messages = 0;
+  int n, num_lines_taken = 0;
   /* Receive data */
   while ((n = read(sockfd, &recvBuf, BUFFER_SIZE - 1)) > 0) {
     recvBuf[n] = '\0';
 
-    if (DEBUG)
-      printf("Got message: %s\n", recvBuf);
+    // Replace \r and \n with spaces
+    char *next_replace;
 
-    if (num_messages < TEXT_ROWS_ON_SCREEN - 3)
-      strncpy(messages[num_messages++], recvBuf, BUFFER_SIZE - 1);
-    else {
-      // Shift everything up one and delete the oldest message
-      for (int i = 0; i < TEXT_ROWS_ON_SCREEN - 4; i++)
-        strncpy(messages[i], messages[i + 1], BUFFER_SIZE - 1);
+    while ((next_replace = strchr(recvBuf, '\n')) != NULL)
+      *next_replace = ' ';
 
-      // Add new message
-      strncpy(messages[TEXT_ROWS_ON_SCREEN - 4], recvBuf, BUFFER_SIZE - 1);
-    }
+    while ((next_replace = strchr(recvBuf, '\r')) != NULL)
+      *next_replace = ' ';
 
-    if (DEBUG) {
-      printf("message cache:\n");
-      for (int i = 0; i < num_messages; i++) {
-        printf("index %d: %s\n", i, messages[i]);
+    printf("Got message: %s\n", recvBuf);
+    int lines_needed = 1;
+
+    if (strlen(recvBuf) > TEXT_COLS_ON_SCREEN)
+      lines_needed += strlen(recvBuf) / TEXT_COLS_ON_SCREEN;
+
+    printf("Lines needed: %d, lines taken: %d\n", lines_needed,
+           num_lines_taken);
+
+    pthread_mutex_lock(&read_zone_mutex);
+
+    if (num_lines_taken + lines_needed <= TEXT_ROWS_ON_SCREEN - 3) {
+      // No shifting needed
+      for (int i = num_lines_taken; i < num_lines_taken + lines_needed; i++) {
+        strncpy(read_zone_data + i * (TEXT_COLS_ON_SCREEN + 1), recvBuf + (i - num_lines_taken) * TEXT_COLS_ON_SCREEN, TEXT_COLS_ON_SCREEN);
       }
+
+      num_lines_taken += lines_needed;
     }
+
+    pthread_mutex_unlock(&read_zone_mutex);
   }
 
   return NULL;
