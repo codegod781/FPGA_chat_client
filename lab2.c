@@ -143,12 +143,22 @@ void init_keymap() {
   key_map[0x71] = '|';      // Keyboard \ and |
   key_map[0x72] = '#';       // Keyboard Non-US # and ~
   key_map[0x73] = ':';       // Keyboard ; and :
-  key_map[0x54] = '\'';      // Keyboard ' and '
+  key_map[0x74] = '"';      // Keyboard ' and '
   key_map[0x75] = '~';       // Keyboard ` and ~
   key_map[0x76] = '<';       // Keyboard , and <
   key_map[0x77] = '>';       // Keyboard . and >
   key_map[0x78] = '?';       // Keyboard / and ?
 
+  key_map[0x5e] = '!'; // Keyboard 1 and !
+  key_map[0x5f] = '@'; // Keyboard 2 and @
+  key_map[0x60] = '#'; // Keyboard 3 and #
+  key_map[0x61] = '$'; // Keyboard 4 and $
+  key_map[0x62] = '%'; // Keyboard 5 and %
+  key_map[0x63] = '^'; // Keyboard 6 and ^
+  key_map[0x64] = '&'; // Keyboard 7 and &
+  key_map[0x65] = '*'; // Keyboard 8 and *
+  key_map[0x66] = '('; // Keyboard 9 and (
+  key_map[0x67] = ')'; // Keyboard 0 and )
 
 }
 
@@ -158,15 +168,13 @@ char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
 
   char output = key_map[(int)keycode[0]];
 
-  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22)
-    if(*keycode[0] >= 0x2d && *keycode[0] <= 0x38) {
+  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22) {
+    if(keycode[0] >= 0x1e && keycode[0] <= 0x38)
         // Add 0x40 to the pointer value
-        *keycode[0] += 0x40;
-        char output = key_map[(int)keycode[0]];
-    } 
-    else{
+        output = key_map[(int)keycode[0] + 0x40];
+    else
       output = toupper(output);
-    }
+  }
     
 
   return output;
@@ -387,7 +395,7 @@ int main() {
         else {
           strncpy(message, write_zone_data, WRITE_SIZE);
           message[strlen(write_zone_data)] = '\r';
-          message[strlen(write_zone_data + 1)] = '\n';
+          message[strlen(write_zone_data)] = '\n';
 
           if (write(sockfd, message, strlen(message)) != strlen(message))
             fprintf(stderr,
