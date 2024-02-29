@@ -135,6 +135,21 @@ void init_keymap() {
 
   key_map[0x4f] = RIGHT; // Keyboard Right Arrow
   key_map[0x50] = LEFT;  // Keyboard Left Arrow
+
+  key_map[0x6d] = '_';       // Keyboard - and _
+  key_map[0x6e] = '+';       // Keyboard = and +
+  key_map[0x6f] = '{';       // Keyboard [ and {
+  key_map[0x70] = '}';       // Keyboard ] and }
+  key_map[0x71] = '|';      // Keyboard \ and |
+  key_map[0x72] = '#';       // Keyboard Non-US # and ~
+  key_map[0x73] = ':';       // Keyboard ; and :
+  key_map[0x54] = '\'';      // Keyboard ' and '
+  key_map[0x75] = '~';       // Keyboard ` and ~
+  key_map[0x76] = '<';       // Keyboard , and <
+  key_map[0x77] = '>';       // Keyboard . and >
+  key_map[0x78] = '?';       // Keyboard / and ?
+
+
 }
 
 char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
@@ -143,11 +158,16 @@ char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
 
   char output = key_map[(int)keycode[0]];
 
-  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22) {
-    // if (keycode is a-z)
-    output = toupper(output);
-    // else if (keycode + 50 < MAP SIZE), output = key_map[keycode+50]
-  }
+  if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22)
+    if(*keycode[0] >= 0x2d && *keycode[0] <= 0x38) {
+        // Add 0x40 to the pointer value
+        *keycode[0] += 0x40;
+        char output = key_map[(int)keycode[0]];
+    } 
+    else{
+      output = toupper(output);
+    }
+    
 
   return output;
 }
