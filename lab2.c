@@ -8,14 +8,14 @@
 #include "fbputchar.h"
 #include "usbkeyboard.h"
 #include <arpa/inet.h>
+#include <ctype.h>
+#include <linux/fb.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <linux/fb.h>
 
 /* Update SERVER_HOST to be the IP address of
  * the chat server you are connecting to
@@ -75,7 +75,7 @@ char key_map[MAP_SIZE];
 void init_keymap() {
   // Initialize all elements of the keymap to NULL
   for (int i = 0; i < MAP_SIZE; i++) {
-    key_map[i] = NULL;
+    key_map[i] = 0;
   }
 
   key_map[0x04] = 'a'; // Keyboard a and A
@@ -136,18 +136,18 @@ void init_keymap() {
   key_map[0x4f] = RIGHT; // Keyboard Right Arrow
   key_map[0x50] = LEFT;  // Keyboard Left Arrow
 
-  key_map[0x6d] = '_';       // Keyboard - and _
-  key_map[0x6e] = '+';       // Keyboard = and +
-  key_map[0x6f] = '{';       // Keyboard [ and {
-  key_map[0x70] = '}';       // Keyboard ] and }
-  key_map[0x71] = '|';      // Keyboard \ and |
-  key_map[0x72] = '#';       // Keyboard Non-US # and ~
-  key_map[0x73] = ':';       // Keyboard ; and :
-  key_map[0x74] = '"';      // Keyboard ' and '
-  key_map[0x75] = '~';       // Keyboard ` and ~
-  key_map[0x76] = '<';       // Keyboard , and <
-  key_map[0x77] = '>';       // Keyboard . and >
-  key_map[0x78] = '?';       // Keyboard / and ?
+  key_map[0x6d] = '_'; // Keyboard - and _
+  key_map[0x6e] = '+'; // Keyboard = and +
+  key_map[0x6f] = '{'; // Keyboard [ and {
+  key_map[0x70] = '}'; // Keyboard ] and }
+  key_map[0x71] = '|'; // Keyboard \ and |
+  key_map[0x72] = '#'; // Keyboard Non-US # and ~
+  key_map[0x73] = ':'; // Keyboard ; and :
+  key_map[0x74] = '"'; // Keyboard ' and '
+  key_map[0x75] = '~'; // Keyboard ` and ~
+  key_map[0x76] = '<'; // Keyboard , and <
+  key_map[0x77] = '>'; // Keyboard . and >
+  key_map[0x78] = '?'; // Keyboard / and ?
 
   key_map[0x5e] = '!'; // Keyboard 1 and !
   key_map[0x5f] = '@'; // Keyboard 2 and @
@@ -159,57 +159,23 @@ void init_keymap() {
   key_map[0x65] = '*'; // Keyboard 8 and *
   key_map[0x66] = '('; // Keyboard 9 and (
   key_map[0x67] = ')'; // Keyboard 0 and )
-
 }
 
 char decode_keypress(uint8_t *keycode, uint8_t modifiers) {
   if (keycode[0] != 0 && keycode[1] != 0)
-    return NULL; // Skip if two pressed at once
+    return 0; // Skip if two pressed at once
 
   char output = key_map[(int)keycode[0]];
 
   if (modifiers == 0x20 || modifiers == 0x02 || modifiers == 0x22) {
-    if(keycode[0] >= 0x1e && keycode[0] <= 0x38)
-        // Add 0x40 to the pointer value
-        output = key_map[(int)keycode[0] + 0x40];
+    if (keycode[0] >= 0x1e && keycode[0] <= 0x38)
+      // Add 0x40 to the pointer value
+      output = key_map[(int)keycode[0] + 0x40];
     else
       output = toupper(output);
   }
-    
 
   return output;
-}
-
-void write_char(char input) {
-  if (input == NULL)
-    return;
-
-  int size = strlen(write_zone_data);
-
-  if (DEBUG) {
-    printf("Size: %d\n", size);
-    printf("Got keypress: %c\n", input);
-    printf("Cursor: %d\n", cursor_position);
-    printf("Write string: %s\n", write_zone_data);
-  }
-
-  if (size < WRITE_SIZE && cursor_position < WRITE_SIZE - 1) {
-    if (input == BACKSPACE && size > 0) {
-      delete_char();
-      if (DEBUG)
-        printf("String after delete: %s\n", write_zone_data);
-    } else if (input == LEFT) {
-      move_cursor_left();
-    } else if (input == RIGHT) {
-      move_cursor_right();
-    } else if (input < ENTER || input > LEFT && input != NULL) {
-      write_zone_data[cursor_position] = input;
-      cursor_position++;
-    }
-  } else {
-    cursor_position = WRITE_SIZE - 2;
-    fprintf(stderr, "Buffer Overflow\n");
-  }
 }
 
 void delete_char() {
@@ -235,6 +201,38 @@ void move_cursor_left() {
 void move_cursor_right() {
   if (write_zone_data[cursor_position] != '\0')
     cursor_position++; // Move cursor one position to the right
+}
+
+void write_char(char input) {
+  if (!input)
+    return;
+
+  int size = strlen(write_zone_data);
+
+  if (DEBUG) {
+    printf("Size: %d\n", size);
+    printf("Got keypress: %c\n", input);
+    printf("Cursor: %d\n", cursor_position);
+    printf("Write string: %s\n", write_zone_data);
+  }
+
+  if (size < WRITE_SIZE && cursor_position < WRITE_SIZE - 1) {
+    if (input == BACKSPACE && size > 0) {
+      delete_char();
+      if (DEBUG)
+        printf("String after delete: %s\n", write_zone_data);
+    } else if (input == LEFT) {
+      move_cursor_left();
+    } else if (input == RIGHT) {
+      move_cursor_right();
+    } else if ((input < ENTER || input > LEFT) && input) {
+      write_zone_data[cursor_position] = input;
+      cursor_position++;
+    }
+  } else {
+    cursor_position = WRITE_SIZE - 2;
+    fprintf(stderr, "Buffer Overflow\n");
+  }
 }
 
 int main() {
@@ -327,10 +325,6 @@ int main() {
   for (int i = 0; i < read_zone_size; i++)
     read_zone_data[i] = '\0'; // Init to all nulls
 
-  printf("%s\n", read_zone_data);
-  printf("%s\n", read_zone_data + 65);
-  printf("%s\n", read_zone_data + 130);
-
   cursor_position = 0;
   cursor_idx_on_screen = 0; // Used to position the cursor across pages
   // How many lines were used in the write zone at the last keypress
@@ -349,6 +343,8 @@ int main() {
   }
 
   init_keymap();
+
+  printf("Chat client online!\n");
 
   /* Look for and handle keypresses */
   for (;;) {
@@ -387,7 +383,8 @@ int main() {
       // write_zone_data[WRITE_SIZE - 1] should ALWAYS be '\0' - don't let them
       // overwrite
       if (input == ENTER) {
-        // Send the message to the server. We need to add a carriage return first
+        // Send the message to the server. We need to add a carriage return
+        // first
         char *message;
 
         if ((message = malloc(WRITE_SIZE + 2)) == NULL)
@@ -411,17 +408,19 @@ int main() {
 
           free(message);
         }
+      } else if (input == ESC) {
+        printf("Terminating...\n");
+        strncpy(write_zone_data, "Goodbye!", WRITE_SIZE);
+        pthread_mutex_unlock(&write_zone_mutex);
+        sleep(0.1); // Give time for Goodbye! to propogate
+        break;
       } else
         write_char(input);
 
+      pthread_mutex_unlock(&write_zone_mutex);
+
       if (DEBUG)
         printf("%s (%c)\n", keystate, input);
-
-      pthread_mutex_unlock(&write_zone_mutex);
-      // fbputs(keystate, 6, 0);
-      if (packet.keycode[0] == 0x29) { /* ESC pressed? */
-        break;
-      }
     }
   }
 
@@ -513,7 +512,7 @@ void *drawing_thread_f(void *ignored) {
     cursor_idx_on_screen = cursor_position - first_char_displayed;
     if (first_char_displayed != 0)
       cursor_idx_on_screen--; // There's no longer the >
-    char cursor_char = NULL;
+    char cursor_char = '\0';
 
     if (cursor_position > 0 && cursor_position < WRITE_SIZE)
       cursor_char = write_zone_data[cursor_position - 1];
@@ -580,24 +579,51 @@ void *network_thread_f(void *ignored) {
     while ((next_replace = strchr(recvBuf, '\r')) != NULL)
       *next_replace = ' ';
 
-    printf("Got message: %s\n", recvBuf);
+    if (DEBUG)
+      printf("Got message: %s\n", recvBuf);
     int lines_needed = 1;
 
     if (strlen(recvBuf) > TEXT_COLS_ON_SCREEN)
       lines_needed += strlen(recvBuf) / TEXT_COLS_ON_SCREEN;
 
-    printf("Lines needed: %d, lines taken: %d\n", lines_needed,
-           num_lines_taken);
+    if (DEBUG)
+      printf("Lines needed: %d, lines taken: %d\n", lines_needed,
+             num_lines_taken);
 
     pthread_mutex_lock(&read_zone_mutex);
 
     if (num_lines_taken + lines_needed <= TEXT_ROWS_ON_SCREEN - 3) {
       // No shifting needed
       for (int i = num_lines_taken; i < num_lines_taken + lines_needed; i++) {
-        strncpy(read_zone_data + i * (TEXT_COLS_ON_SCREEN + 1), recvBuf + (i - num_lines_taken) * TEXT_COLS_ON_SCREEN, TEXT_COLS_ON_SCREEN);
+        strncpy(read_zone_data + i * (TEXT_COLS_ON_SCREEN + 1),
+                recvBuf + (i - num_lines_taken) * TEXT_COLS_ON_SCREEN,
+                TEXT_COLS_ON_SCREEN);
       }
 
       num_lines_taken += lines_needed;
+    } else {
+      // Shifting up by num_lines_taken + lines_needed - (TEXT_ROWS_ON_SCREEN -
+      // 3)
+      if (DEBUG)
+        printf("Shifting up by %d\n",
+               num_lines_taken + lines_needed - (TEXT_ROWS_ON_SCREEN - 3));
+      for (int i = 0;
+           i < num_lines_taken + lines_needed - (TEXT_ROWS_ON_SCREEN - 3); i++)
+        for (int j = 0; j < num_lines_taken - 1; j++) {
+          // Copy the one below up
+          strncpy(read_zone_data + j * (TEXT_COLS_ON_SCREEN + 1),
+                  read_zone_data + (j + 1) * (TEXT_COLS_ON_SCREEN + 1),
+                  TEXT_COLS_ON_SCREEN + 1);
+        }
+
+      num_lines_taken = TEXT_ROWS_ON_SCREEN - 3;
+
+      for (int i = 0; i < lines_needed; i++) {
+        int index_in_zone = num_lines_taken - lines_needed + i;
+        strncpy(read_zone_data + index_in_zone * (TEXT_COLS_ON_SCREEN + 1),
+                recvBuf + i * (TEXT_COLS_ON_SCREEN), TEXT_COLS_ON_SCREEN);
+      }
+      fbclear();
     }
 
     pthread_mutex_unlock(&read_zone_mutex);
